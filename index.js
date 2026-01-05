@@ -10,12 +10,80 @@ const bot = new TelegramBot(Token, { polling: true });
 
 console.log("Bot is running...");
 
+const CHANNELS = ["@AutoStarsNews"];
+
+async function checkSubscription(userId) {
+  for (const channel of CHANNELS) {
+    try {
+      const member = await bot.getChatMember(channel, userId);
+      if (member.status === "left" || member.status === "kicked") {
+        return false;
+      }
+    } catch (e) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bot.onText(/\/start/, async (message) => {
+  const chatId = message.chat.id;
+  const isSubscribed = await checkSubscription(message.from.id);
+
+  if (!isSubscribed) {
+    return bot.sendMessage(
+      chatId,
+      "❗ Botdan foydalanish uchun quyidagi kanalga obuna bo‘ling 👇",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "📢 Kanalga obuna bo‘lish",
+                url: "https://t.me/AutoStarsNews"
+              }
+            ],
+            [
+              {
+                text: "✅ Tekshirish",
+                callback_data: "CHECK_SUB"
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+  bot.sendMessage(chatId, "Xush kelibsiz 👋");
+});
+
+bot.on("callback_query", async (q) => {
+  if (q.data !== "CHECK_SUB") return;
+
+  const chatId = q.message.chat.id;
+  const userId = q.from.id;
+
+  const isSubscribed = await checkSubscription(userId);
+
+  if (!isSubscribed) {
+    return bot.answerCallbackQuery(q.id, {
+      text: "❌ Hali obuna bo‘lmagansiz",
+      show_alert: true
+    });
+  }
+
+  await bot.answerCallbackQuery(q.id);
+  bot.sendMessage(chatId, "✅ Rahmat! Endi botdan foydalanishingiz mumkin 🎉");
+});
+
+
 bot.onText(/\/start/, (message) => {
   bot.sendMessage(
     message.chat.id,
     `${message.chat.first_name} 👋 Assalomu alaykum, botga xush kelibsiz!
 
-🛒 Botimiz orqali arzonlashtirilgan «Stars» larni xarid qilishingiz mumkin
+🛒 Botimiz orqali arzonlashtirilgan «Stars va Premium» larni xarid qilishingiz mumkin
 
 Quyidagi menyudan keraklisini tanlang 👇`,
     {
