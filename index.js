@@ -28,13 +28,15 @@ const STAR_PACKAGES = {
   10000: 2200000
 };
 
+const userState = {}
+
 
 async function checkSubscription(userId) {
   for (const channel of CHANNELS) {
     try {
       const member = await bot.getChatMember(channel, userId);
       if (member.status === "left" || member.status === "kicked") return false;
-    } catch(error) {
+    } catch (error) {
       return false;
     }
   }
@@ -110,6 +112,7 @@ bot.on("callback_query", async (query) => {
 
 
   if (data === "BACK_HOME") {
+    delete userState[userId];
     await bot.answerCallbackQuery(query.id);
     return bot.editMessageText(
       `${query.from.first_name} 👋 Assalomu alaykum!
@@ -137,6 +140,7 @@ Quyidagi menyudan keraklisini tanlang 👇`,
 
 
   if (data === "buy_stars") {
+    userState[userId] = { step: "WAIT_STARS" };
     await bot.answerCallbackQuery(query.id);
     return bot.editMessageText(
       `🌟 <b>Telegram Stars buyurtma</b>
@@ -196,6 +200,18 @@ shunchalik afzalliklarga ega bo‘lasiz!
     const stars = parseInt(data.split("_")[1]);
     const price = STAR_PACKAGES[stars] ?? stars * STAR_PRICE_PER_ONE;
 
+    const username =
+    query.from.username
+      ? `@${query.from.username}`
+      : `${query.from.first_name} (username yo‘q)`;
+
+  
+
+    userState[userId] = {
+      step: "WAIT_USERNAME",
+      stars
+    }
+
     await bot.answerCallbackQuery(query.id);
 
     return bot.editMessageText(
@@ -224,58 +240,23 @@ shunchalik afzalliklarga ega bo‘lasiz!
     );
   }
 
-  bot.on("message", (message) => {
-    if (!message.text) return;
-    if (message.text.startsWith("/")) return;
-
-    const stars = parseInt(message.text.trim());
-    if (isNaN(stars)) return;
-
-    if (stars < 50 || stars > 10000) return;
-
-    const price = STAR_PACKAGES[stars] ?? stars * STAR_PRICE_PER_ONE;
-
-    bot.sendMessage(message.chat.id,
-      `⭐️ Stars buyurtma
-
-📊 Buyurtma ma'lumotlari:
-   └ 🎯 Miqdor:  ${stars} ⭐️
-   └ 💰 Narxi: ${price.toLocaleString()}.00 so'm
-
-👤 Kimga yuboramiz?
-📝 @username kiriting:`,
-      {
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "👤 O'zimga", callback_data: `BUY_STARS_${stars}` }
-            ],
-            [
-              { text: "⬅️ Orqaga", callback_data: "BACK_STARS_PAGE" }
-            ]
-          ]
-        }
-      }
-    );
-
-
-  });
-
   if (data === "BACK_STARS_PAGE") {
     await bot.answerCallbackQuery(query.id);
 
+    userState[userId] = {
+      step: "WAIT_STARS"
+    };
+
     return bot.editMessageText(
       `🌟 <b>Telegram Stars buyurtma</b>
-
+      
 ✨ Siz qanchalik ko‘p Stars olsangiz,
 shunchalik afzalliklarga ega bo‘lasiz!
 
 <blockquote>🔹 Minimal: 50
 🔹 Maksimal: 10000
 </blockquote>
-
+      
 ✅ Kerakli miqdorni tanlang yoki raqamlar bilan kiriting 👇`,
       {
         chat_id: chatId,
@@ -325,13 +306,13 @@ shunchalik afzalliklarga ega bo‘lasiz!
     await bot.answerCallbackQuery(query.id);
 
     return bot.editMessageText(`<b> 💎 Telegram Premium buyurtma</b>
-
+        
 📅 Qancha muddatlik Premium paket sotib olmoqchisiz tanlang:
-
+        
 💎 Mavjud paketlar: 
-└ 🕐 3 oylik: 165000 so'm
-└ 🕐 6 oylik: 230000 so'm
-└ 🕐 1 yillik: 400000 so'm
+└ 🕐 3 oylik: 169.990 so'm
+└ 🕐 6 oylik: 209.990 so'm
+└ 🕐 1 yillik: 364.990 so'm
 
 🎯 Tanlang: `,
       {
@@ -341,13 +322,13 @@ shunchalik afzalliklarga ega bo‘lasiz!
         reply_markup: {
           inline_keyboard: [
             [
-              { text: "💎 1 oylik - 45 000 so'm", callback_data: "PREMIUM_1" },
-              { text: "💎 3 oylik - 165 000 so'm", callback_data: "PREMIUM_3" },
+              { text: "💎 1 oylik - 47 990 so'm", callback_data: "PREMIUM_1" },
+              { text: "💎 3 oylik - 169 990 so'm", callback_data: "PREMIUM_3" },
 
             ],
             [
-              { text: "💎 6 oylik - 230 000 so'm", callback_data: "PREMIUM_6" },
-              { text: "💎 1 yillik - 400 000 so'm", callback_data: "PREMIUM_12" },
+              { text: "💎 6 oylik - 209 990 so'm", callback_data: "PREMIUM_6" },
+              { text: "💎 1 yillik - 364 990 so'm", callback_data: "PREMIUM_12" },
             ],
             [
               { text: "⬅️ Orqaga", callback_data: "BACK_HOME" }
@@ -365,13 +346,12 @@ shunchalik afzalliklarga ega bo‘lasiz!
     return bot.editMessageText(`👑 Premium sotib olish
 
 📊 Buyurtma ma'lumotlari:
-   └ 🎯 Miqdor:  1 oylik
-   └ 💰 Narxi: 45 000.00 so'm
+└ 🎯 Miqdor:  1 oylik
+└ 💰 Narxi: 47 990.00 so'm
+        
+<b>Hurmatli mijoz, 1 oylik Premium paket yo'qligi sababli uni to'g'ridan to'gri onlayn tarzida sotib olish mumkin emas. Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishingiz mumkin.</b>
 
-<b>Hurmatli mijoz, 1 oylik Premium paket yo'qligi sababli
-uni to'g'ridan to'gri onlayn tarzida sotib olish mumkin emas.
-Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishingiz mumkin.</b>
- <blockquote>Noqulayliklar uchun uzur soraymiz.</blockquote>`, {
+<blockquote><b>Noqulayliklar uchun uzur soraymiz.</b></blockquote>`, {
 
       chat_id: chatId,
       message_id: messageId,
@@ -397,11 +377,11 @@ Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishi
 
 
     return bot.editMessageText(`👑 Premium sotib olish
-
+        
 📊 Buyurtma ma'lumotlari:
-   └ 🎯 Miqdor:  3 oylik
-   └ 💰 Narxi: 165 000.00 so'm
-
+└ 🎯 Miqdor:  3 oylik
+└ 💰 Narxi: 169 990.00 so'm
+        
 👤 Kimga yuboramiz?
 📝 @username kiriting:`,
       {
@@ -426,11 +406,11 @@ Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishi
   if (data === "PREMIUM_6") {
     await bot.answerCallbackQuery(query.id);
     return bot.editMessageText(`👑 Premium sotib olish
-
+        
 📊 Buyurtma ma'lumotlari:
-   └ 🎯 Miqdor:  6 oylik
-   └ 💰 Narxi: 230 000.00 so'm
-
+└ 🎯 Miqdor:  6 oylik
+└ 💰 Narxi: 209 990.00 so'm
+        
 👤 Kimga yuboramiz?
 📝 @username kiriting:`,
       {
@@ -455,11 +435,11 @@ Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishi
   if (data === "PREMIUM_12") {
     await bot.answerCallbackQuery(query.id);
     return bot.editMessageText(`👑 Premium sotib olish
-
+          
 📊 Buyurtma ma'lumotlari:
-   └ 🎯 Miqdor:  1 Yillik
-   └ 💰 Narxi: 400 000.00 so'm
-
+└ 🎯 Miqdor:  1 Yillik
+└ 💰 Narxi: 364 990.00 so'm
+          
 👤 Kimga yuboramiz?
 📝 @username kiriting:`,
       {
@@ -484,13 +464,13 @@ Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishi
   if (data === "BACK_PREMIUM_PAGE") {
     await bot.answerCallbackQuery(query.id);
     return bot.editMessageText(`<b> 💎 Telegram Premium buyurtma</b>
-
+            
 📅 Qancha muddatlik Premium paket sotib olmoqchisiz tanlang:
 
 💎 Mavjud paketlar: 
-└ 🕐 3 oylik: 165000 so'm
-└ 🕐 6 oylik: 230000 so'm
-└ 🕐 1 yillik: 400000 so'm
+└ 🕐 3 oylik: 169 990 so'm
+└ 🕐 6 oylik: 209 990 so'm
+└ 🕐 1 yillik: 364 990 so'm
 
 🎯 Tanlang: `,
       {
@@ -501,13 +481,13 @@ Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishi
         reply_markup: {
           inline_keyboard: [
             [
-              { text: "💎 1 oylik - 45 000 so'm", callback_data: "PREMIUM_1" },
-              { text: "💎 3 oylik - 165 000 so'm", callback_data: "PREMIUM_3" },
+              { text: "💎 1 oylik - 47 990 so'm", callback_data: "PREMIUM_1" },
+              { text: "💎 3 oylik - 169 990 so'm", callback_data: "PREMIUM_3" },
 
             ],
             [
-              { text: "💎 6 oylik - 230 000 so'm", callback_data: "PREMIUM_6" },
-              { text: "💎 1 yillik - 400 000 so'm", callback_data: "PREMIUM_12" },
+              { text: "💎 6 oylik - 209 990 so'm", callback_data: "PREMIUM_6" },
+              { text: "💎 1 yillik - 364 990 so'm", callback_data: "PREMIUM_12" },
             ],
             [
               { text: "⬅️ Orqaga", callback_data: "BACK_HOME" }
@@ -520,9 +500,109 @@ Shuning uchun, Bizning adminizga bo'glanib 1 oylik premium paketni xarid qilishi
     )
   }
 
+ 
+
 
 });
 
 
+
+
+
+
+bot.on("message", async (message) => {
+  if (!message.text) return;
+  if (message.text.startsWith("/")) return;
+
+  const userId = message.from.id;
+  const chatId = message.chat.id;
+  const messageId = message.message_id;
+  
+  const state = userState[userId];
+  if (!state) return;
+
+  // 1️⃣ USER QO‘LDA STARS KIRITAYAPTI
+  if (state.step === "WAIT_STARS") {
+
+    const stars = parseInt(message.text.trim());
+    if (isNaN(stars)) return;
+
+    if (stars < 50 || stars > 10000) {
+      return bot.sendMessage(
+        chatId,
+        "❗ Stars miqdori 50–10000 oralig‘ida bo‘lishi kerak"
+      );
+    }
+
+    const price = STAR_PACKAGES[stars] ?? stars * STAR_PRICE_PER_ONE;
+
+    // ✅ TO‘G‘RI STATE (ARRAY EMAS!)
+    userState[userId] = {
+      step: "WAIT_USERNAME",
+      stars
+    };
+
+  
+
+    return bot.sendMessage(
+      chatId,
+      `⭐️ Stars buyurtma
+
+📊 Buyurtma ma'lumotlari:
+└ 🎯 Miqdor: ${stars} ⭐️
+└ 💰 Narxi: ${price.toLocaleString()}.00 so'm
+
+👤 Kimga yuboramiz?
+📝 @username kiriting:`,
+      {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "👤 O'zimga", callback_data: `BUY_STARS_${stars}` }
+            ],
+            [
+              { text: "⬅️ Orqaga", callback_data: "BACK_STARS_PAGE" }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+
+  // 2️⃣ USER USERNAME KIRITAYAPTI
+  if (state.step === "WAIT_USERNAME") {
+    const username = message.text.trim();
+
+    if (!username.startsWith("@")) {
+      return bot.sendMessage(
+        chatId,
+        "❗ Username @ bilan boshlanishi kerak"
+      );
+    }
+
+    
+    const stars = state.stars;
+    const price = STAR_PACKAGES[stars] ?? stars * STAR_PRICE_PER_ONE;
+    
+    delete userState[userId]; // 🔥 yakun
+    
+    return bot.sendMessage(
+      chatId,
+      `✅ Buyurtma qabul qilindi!
+      
+      👤 Foydalanuvchi: ${username}
+      ⭐️ Stars: ${stars}
+      💰 Narxi: ${price.toLocaleString()}.00 so'm
+      
+      💳 To‘lovni amalga oshiring 👇`
+    );
+    
+  }
+  
+
+});
 
 
