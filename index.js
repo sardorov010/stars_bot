@@ -1,5 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
+import db from "./database.js";
 dotenv.config();
 
 const Token = process.env.TOKEN
@@ -44,9 +45,31 @@ async function checkSubscription(userId) {
 }
 
 
-bot.onText(/\/start/, async (message) => {
+bot.onText(/\/start(.*)/, async (message, match) => {
   const chatId = message.chat.id;
-  const isSubscribed = await checkSubscription(message.from.id);
+  const userId = message.from.id;
+  const username = message.from.username ? `@${message.from.username}` : null;
+
+  // 🔹 REFERAL ID
+  const refId = match[1]?.trim();
+  const cleanRefId =
+    refId && refId !== "" && refId !== String(userId)
+      ? Number(refId)
+      : null;
+
+  // 🔹 USER BOR-YO‘QLIGINI TEKSHIRAMIZ
+  const existingUser = db.prepare(
+    "SELECT * FROM users WHERE user_id = ?"
+  ).get(userId);
+
+  if (!existingUser) {
+    db.prepare(`
+      INSERT INTO users (user_id, ref_by, balance)
+      VALUES (?, ?, 0)
+    `).run(userId, cleanRefId);
+  }
+
+  const isSubscribed = await checkSubscription(userId);
 
   if (!isSubscribed) {
     return bot.sendMessage(
@@ -66,6 +89,10 @@ bot.onText(/\/start/, async (message) => {
       }
     );
   }
+
+  // 👉 shu yerda asosiy menyu yuboriladi
+
+
 
   bot.sendMessage(
     chatId,
@@ -138,6 +165,53 @@ Quyidagi menyudan keraklisini tanlang 👇`,
     );
   }
 
+  if (data === "free_stars") {
+  await bot.answerCallbackQuery(query.id);
+
+  const refLink = `https://t.me/AutoStarsBuyBot?start=ref_${userId}`;
+
+  // 🔹 nechta referal borligini DB dan olamiz
+  const totalRefs = db.prepare(
+    "SELECT COUNT(*) AS count FROM users WHERE ref_by = ?"
+  ).get(userId).count;
+
+  return bot.editMessageText(
+    `👥 <b>Referal tizimi</b>
+
+⁉️ <b>U qanday ishlaydi?</b>
+🎁 Botga do'stingizni taklif qiling.  
+Agarda taklif qilgan do'stingiz botdan buyurtma uchun to'lovni amalga oshirsa sizga quyidagi miqdorda bonus beriladi
+
+▫️ Telegram Stars: <b>+3 ⭐️</b>
+▫️ Telegram Premium: <b>+7 ⭐️</b>
+
+📊 <b>Taklif qilgan do'stlaringiz:</b> ${totalRefs} ta
+
+🔗 <b>Referal havolangiz:</b>
+<code>${refLink}</code>
+
+📤 Ushbu havolani do‘stlaringizga yuboring`,
+    {
+      chat_id: chatId,
+      message_id: messageId,
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "🔗 Do‘stlarga ulashish",
+              switch_inline_query: refLink
+            }
+          ],
+          [
+            { text: "⬅️ Orqaga", callback_data: "BACK_HOME" }
+          ]
+        ]
+      }
+    }
+  );
+}
+
 
   if (data === "buy_stars") {
     userState[userId] = { step: "WAIT_STARS" };
@@ -199,13 +273,6 @@ shunchalik afzalliklarga ega bo‘lasiz!
   if (data.startsWith("STARS_")) {
     const stars = parseInt(data.split("_")[1]);
     const price = STAR_PACKAGES[stars] ?? stars * STAR_PRICE_PER_ONE;
-
-    const username =
-    query.from.username
-      ? `@${query.from.username}`
-      : `${query.from.first_name} (username yo‘q)`;
-
-  
 
     userState[userId] = {
       step: "WAIT_USERNAME",
@@ -459,6 +526,8 @@ shunchalik afzalliklarga ega bo‘lasiz!
         }
       })
 
+
+
   }
 
   if (data === "BACK_PREMIUM_PAGE") {
@@ -500,7 +569,7 @@ shunchalik afzalliklarga ega bo‘lasiz!
     )
   }
 
- 
+
 
 
 });
@@ -517,11 +586,11 @@ bot.on("message", async (message) => {
   const userId = message.from.id;
   const chatId = message.chat.id;
   const messageId = message.message_id;
-  
+
   const state = userState[userId];
   if (!state) return;
 
-  // 1️⃣ USER QO‘LDA STARS KIRITAYAPTI
+
   if (state.step === "WAIT_STARS") {
 
     const stars = parseInt(message.text.trim());
@@ -536,13 +605,13 @@ bot.on("message", async (message) => {
 
     const price = STAR_PACKAGES[stars] ?? stars * STAR_PRICE_PER_ONE;
 
-    // ✅ TO‘G‘RI STATE (ARRAY EMAS!)
+
     userState[userId] = {
       step: "WAIT_USERNAME",
       stars
     };
 
-  
+
 
     return bot.sendMessage(
       chatId,
@@ -572,7 +641,6 @@ bot.on("message", async (message) => {
   }
 
 
-  // 2️⃣ USER USERNAME KIRITAYAPTI
   if (state.step === "WAIT_USERNAME") {
     const username = message.text.trim();
 
@@ -583,12 +651,27 @@ bot.on("message", async (message) => {
       );
     }
 
-    
+
     const stars = state.stars;
     const price = STAR_PACKAGES[stars] ?? stars * STAR_PRICE_PER_ONE;
-    
-    delete userState[userId]; // 🔥 yakun
-    
+
+    db.prepare(`    INSERT INTO orders (user_id, stars, status)
+    VALUES (?, ?, 'paid')
+  `).run(userId, stars);
+
+
+    const user = db.prepare("SELECT ref_by FROM users WHERE user_id = ?").get(userId)
+
+    if (user?.ref_by) {
+      db.prepare(`
+      UPDATE users
+      SET balance = balance + 5
+      WHERE user_id = ?
+    `).run(user.ref_by);
+    }
+
+    delete userState[userId];
+
     return bot.sendMessage(
       chatId,
       `✅ Buyurtma qabul qilindi!
@@ -597,11 +680,12 @@ bot.on("message", async (message) => {
       ⭐️ Stars: ${stars}
       💰 Narxi: ${price.toLocaleString()}.00 so'm
       
+      🎁 Referal bonus hisoblandi
       💳 To‘lovni amalga oshiring 👇`
     );
-    
+
   }
-  
+
 
 });
 

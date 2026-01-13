@@ -13,6 +13,7 @@
   "type": "module",
   "packageManager": "pnpm@10.27.0",
   "dependencies": {
+    "better-sqlite3": "^12.5.0",
     "dotenv": "^17.2.3",
     "node-telegram-bot-api": "^0.67.0"
   }
